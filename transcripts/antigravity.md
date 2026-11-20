@@ -377,3 +377,50 @@ You'd still review the file yourself before committing it to make sure nothing p
 
 yes; please export, scrub, and commit the transcript
 
+### Assistant
+
+Exported, scrubbed, and committed the session transcript to [transcripts/antigravity.md](transcripts/antigravity.md) (`f58f0aa`).
+
+### Scrub verification
+- Stripped internal metadata/wrapper tags and raw tool-call JSON blobs.
+- Converted local `file://` repo links to relative Markdown links.
+- Verified **0** occurrences of your local username, `~` paths, or internal session IDs.
+- Please still give [transcripts/antigravity.md](transcripts/antigravity.md) a quick read before pushing, per [transcripts/README.md](transcripts/README.md).
+
+### Ready for submission
+- **Latest commit SHA (`HEAD`):** `f58f0aa` (`main`, clean working tree, 13 focused commits since `Initial commit`).
+- **Tests:** 45/45 passing on Node `v26.13.1` and `v24.11.1`; `tsc --noEmit` clean on all source and test logic.
+- **Next step:** Push `main` to your GitHub repository (created from the template, not forked) and reply to Torus with the repo URL and commit SHA `f58f0aa`.
+
+---
+
+## Turn 12 — User
+
+Does `<repo>/NOTES.md` properly reflect:
+- What you completed
+- What you chose to skip, and why
+- Any assumptions you made
+- What you would do next with more time
+
+### Assistant
+
+Yes, [NOTES.md](NOTES.md) covers all four required sections concisely (~1 page):
+
+- **What you completed**: Covered in `## What Was Completed` (Tiers 1, 2a, 2b, and 3) plus the design rationale in `## Key Design Decisions`.
+- **What you chose to skip, and why**: Covered in `## Assumptions & What Was Skipped` (kept zero dependencies / no `typescript` devDependency; plus the exact vs. approximate `p95` trade-off in `### Exact vs. Approximate p95`).
+- **Any assumptions you made**: Covered in `## Assumptions & What Was Skipped` (finite `ts`/`seq`, resends preserve `ts`, fail-fast config validation, post-`end()` behavior) and in `### Streaming Memory Bound & Honest Limits` (roughly monotonic device clocks, bounded active device count).
+- **What you would do next with more time**: Covered in `## What I Would Do Next With More Time` (idle-device TTL/state caps + drop-reason metrics, pluggable quantile sketch for high-frequency fleets, CI `tsc --noEmit`).
+
+### Two small drifts from our latest commit (`5a18a4c`)
+If you want [NOTES.md](NOTES.md) 100% in sync with the code:
+1. **Line 23** still describes window closure as `ws + W <= watermark` instead of `ws < windowStartOf(watermark, W)` (which we changed to prevent fractional-`windowMs` float drift).
+2. **Line 34** mentions config validation generally, without noting that validation is **scoped per entrypoint** (`gapMs` only in `detectGaps`, `windowMs` only in `summarize`/`createStream`) and that `createStream` snapshots `config` at creation.
+
+Want me to make that quick 2-line update to [NOTES.md](NOTES.md)?
+
+---
+
+## Turn 13 — User
+
+yes, and update the `transcripts/antigravity.md` transcript to reflect the fullness of this conversation when all other changes are completed.
+
