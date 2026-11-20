@@ -19,10 +19,11 @@ const r = (deviceId: string, ts: number, value: number | null, seq = nextSeq++):
 
 test('drops -Infinity and normalizes -0 values to +0', () => {
   const out = summarize([r('a', 1_000, -Infinity), r('a', 2_000, -0)], config);
-  assert.deepEqual(out, [{ deviceId: 'a', windowStart: 0, count: 1, min: 0, max: 0, avg: 0 }]);
+  assert.deepEqual(out, [{ deviceId: 'a', windowStart: 0, count: 1, min: 0, max: 0, avg: 0, p95: 0 }]);
   assert.ok(Object.is(out[0].min, 0));
   assert.ok(Object.is(out[0].max, 0));
   assert.ok(Object.is(out[0].avg, 0));
+  assert.ok(Object.is(out[0].p95, 0));
 });
 
 test('drops a valid resend of a previously invalid reading', () => {
@@ -38,7 +39,7 @@ test('drops a resend of a previously late reading', () => {
     [r('a', 20_000, 10, 1), r('a', 10_000, 50, 2), r('a', 10_000, 50, 2)],
     config,
   );
-  assert.deepEqual(out, [{ deviceId: 'a', windowStart: 0, count: 1, min: 10, max: 10, avg: 10 }]);
+  assert.deepEqual(out, [{ deviceId: 'a', windowStart: 0, count: 1, min: 10, max: 10, avg: 10, p95: 10 }]);
 });
 
 test('a duplicate arrival does not move newestAcceptedTs forward', () => {
@@ -48,7 +49,7 @@ test('a duplicate arrival does not move newestAcceptedTs forward', () => {
     [r('a', 10_000, 1, 1), r('a', 100_000, 99, 1), r('a', 10_500, 3, 2)],
     config,
   );
-  assert.deepEqual(out, [{ deviceId: 'a', windowStart: 0, count: 2, min: 1, max: 3, avg: 2 }]);
+  assert.deepEqual(out, [{ deviceId: 'a', windowStart: 0, count: 2, min: 1, max: 3, avg: 2, p95: 3 }]);
 });
 
 test('handles zero and negative timestamps with floor-based tumbling windows', () => {
@@ -57,8 +58,8 @@ test('handles zero and negative timestamps with floor-based tumbling windows', (
     { ...config, maxLatenessMs: 100_000 },
   );
   assert.deepEqual(out, [
-    { deviceId: 'a', windowStart: -60_000, count: 1, min: 10, max: 10, avg: 10 },
-    { deviceId: 'a', windowStart: 0, count: 2, min: 20, max: 30, avg: 25 },
+    { deviceId: 'a', windowStart: -60_000, count: 1, min: 10, max: 10, avg: 10, p95: 10 },
+    { deviceId: 'a', windowStart: 0, count: 2, min: 20, max: 30, avg: 25, p95: 30 },
   ]);
   assert.ok(Object.is(out[1].windowStart, 0));
 });
@@ -68,7 +69,7 @@ test('maxLatenessMs of 0 accepts equal timestamps and drops strictly older ones'
     [r('a', 10_000, 1), r('a', 10_000, 3), r('a', 9_999, 100)],
     { ...config, maxLatenessMs: 0 },
   );
-  assert.deepEqual(out, [{ deviceId: 'a', windowStart: 0, count: 2, min: 1, max: 3, avg: 2 }]);
+  assert.deepEqual(out, [{ deviceId: 'a', windowStart: 0, count: 2, min: 1, max: 3, avg: 2, p95: 3 }]);
 });
 
 test('sorts deviceId using plain string comparison, not localeCompare', () => {
@@ -99,4 +100,18 @@ test('does not mutate the input array or its reading objects', () => {
   const out = summarize(readings, config);
   assert.equal(out.length, 2);
   assert.deepEqual(readings, snapshot);
+});
+
+test('computes exact nearest-rank p95 across sample sizes and unsorted inputs', () => {
+  // 20 values 1..20 in reverse order -> ceil(0.95 * 20) = 19th smallest = 19.
+  const twenty = Array.from({ length: 20 }, (_, i) => r('a', 1_000 + i * 100, 20 - i));
+  assert.equal(summarize(twenty, config)[0].p95, 19);
+
+  // 21 values 1..21 -> ceil(0.95 * 21) = 20th smallest = 20.
+  const twentyOne = Array.from({ length: 21 }, (_, i) => r('a', 1_000 + i * 100, i + 1));
+  assert.equal(summarize(twentyOne, config)[0].p95, 20);
+
+  // 100 values 1..100 -> ceil(0.95 * 100) = 95th smallest = 95.
+  const hundred = Array.from({ length: 100 }, (_, i) => r('a', 1_000 + i * 10, 100 - i));
+  assert.equal(summarize(hundred, config)[0].p95, 95);
 });

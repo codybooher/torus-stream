@@ -57,6 +57,7 @@ function assertMatchesSummarize(readings: Reading[], cfg: Config): void {
     assert.equal(a.count, e.count);
     assert.equal(a.min, e.min);
     assert.equal(a.max, e.max);
+    assert.equal(a.p95, e.p95);
     assert.ok(
       Math.abs(a.avg - e.avg) <= 1e-9,
       `avg mismatch for ${a.deviceId}@${a.windowStart}: ${a.avg} vs ${e.avg}`,
@@ -81,12 +82,12 @@ test('emits a window at the exact earliest push when it can no longer change', (
   // newest = 65_000 -> watermark = 60_000, so window [0, 60_000) is now final.
   const closed = stream.push(r('a', 65_000, 40));
   assert.deepEqual(closed, [
-    { deviceId: 'a', windowStart: 0, count: 2, min: 10, max: 30, avg: 20 },
+    { deviceId: 'a', windowStart: 0, count: 2, min: 10, max: 30, avg: 20, p95: 30 },
   ]);
 
   // Only the remaining open window [60_000, 120_000) comes out on end().
   assert.deepEqual(stream.end(), [
-    { deviceId: 'a', windowStart: 60_000, count: 2, min: 20, max: 40, avg: 30 },
+    { deviceId: 'a', windowStart: 60_000, count: 2, min: 20, max: 40, avg: 30, p95: 40 },
   ]);
   assert.deepEqual(stream.end(), []);
 });
@@ -100,14 +101,14 @@ test('one device advancing does not close a quiet device window until end()', ()
   // Advancing `active` closes only `active`'s window.
   const closed = stream.push(r('active', 200_000, 20));
   assert.deepEqual(closed, [
-    { deviceId: 'active', windowStart: 0, count: 1, min: 10, max: 10, avg: 10 },
+    { deviceId: 'active', windowStart: 0, count: 1, min: 10, max: 10, avg: 10, p95: 10 },
   ]);
 
   // `quiet` only flushes on end().
   const remaining = stream.end().sort(compareWindowSummaries);
   assert.deepEqual(remaining, [
-    { deviceId: 'active', windowStart: 180_000, count: 1, min: 20, max: 20, avg: 20 },
-    { deviceId: 'quiet', windowStart: 0, count: 1, min: 5, max: 5, avg: 5 },
+    { deviceId: 'active', windowStart: 180_000, count: 1, min: 20, max: 20, avg: 20, p95: 20 },
+    { deviceId: 'quiet', windowStart: 0, count: 1, min: 5, max: 5, avg: 5, p95: 5 },
   ]);
 });
 
@@ -119,7 +120,7 @@ test('invalid readings do not advance the watermark or close windows', () => {
   // Window [0, 60_000) must still be open and accept ts=2_000.
   assert.deepEqual(stream.push(r('a', 2_000, 20)), []);
   assert.deepEqual(stream.end(), [
-    { deviceId: 'a', windowStart: 0, count: 2, min: 10, max: 20, avg: 15 },
+    { deviceId: 'a', windowStart: 0, count: 2, min: 10, max: 20, avg: 15, p95: 20 },
   ]);
 });
 
@@ -138,7 +139,7 @@ test('evicted seqs are still dropped on resend because they are behind the water
   assert.deepEqual(stream.push(r('a', 1_000, 99, 1)), []);
   assert.equal(stream.stats().trackedSeqs, 1);
   assert.deepEqual(stream.end(), [
-    { deviceId: 'a', windowStart: 60_000, count: 1, min: 20, max: 20, avg: 20 },
+    { deviceId: 'a', windowStart: 60_000, count: 1, min: 20, max: 20, avg: 20, p95: 20 },
   ]);
 });
 

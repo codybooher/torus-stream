@@ -39,6 +39,8 @@ export type WindowSummary = {
   min: number;
   max: number;
   avg: number;
+  /** Exact 95th percentile (nearest-rank) of accepted values in the window. */
+  p95?: number;
 };
 
 /** A period in which a device sent no accepted readings. */
