@@ -1,5 +1,29 @@
 import type { Config, WindowSummary } from './types.ts';
 
+/** Fail fast if a caller supplies an invalid `Config`. */
+export function assertValidConfig(config: Config): void {
+  if (!Number.isFinite(config.windowMs) || config.windowMs <= 0) {
+    throw new RangeError(`config.windowMs must be a finite number > 0 (got ${config.windowMs})`);
+  }
+  if (!Number.isFinite(config.maxLatenessMs) || config.maxLatenessMs < 0) {
+    throw new RangeError(
+      `config.maxLatenessMs must be a finite number >= 0 (got ${config.maxLatenessMs})`,
+    );
+  }
+  if (!Number.isFinite(config.gapMs) || config.gapMs < 0) {
+    throw new RangeError(`config.gapMs must be a finite number >= 0 (got ${config.gapMs})`);
+  }
+  if (
+    !Number.isFinite(config.validRange.min) ||
+    !Number.isFinite(config.validRange.max) ||
+    config.validRange.min > config.validRange.max
+  ) {
+    throw new RangeError(
+      `config.validRange must have finite bounds with min <= max (got [${config.validRange.min}, ${config.validRange.max}])`,
+    );
+  }
+}
+
 /** True when `value` is a finite number within `validRange` (bounds inclusive). */
 export function isValidValue(
   value: number | null,

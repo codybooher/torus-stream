@@ -5,7 +5,7 @@ import {
   toWindowSummary,
   type WindowAccumulator,
 } from './accumulator.ts';
-import { isTooLate, isValidValue, windowStartOf } from './rules.ts';
+import { assertValidConfig, isTooLate, isValidValue, windowStartOf } from './rules.ts';
 
 export type Stream = {
   /** Accept one reading, in arrival order. Returns any windows that just became final. */
@@ -37,12 +37,18 @@ type DeviceStreamState = {
  * Internal factory that exposes live memory counters alongside the `Stream` API.
  */
 export function createStreamWithStats(config: Config): InstrumentedStream {
+  assertValidConfig(config);
   const devices = new Map<string, DeviceStreamState>();
   // Bucket width for time-based eviction of `seenSeqs`. When `maxLatenessMs > 0`,
   // using `maxLatenessMs` keeps at most ~2 live buckets per active device.
   const bucketMs = config.maxLatenessMs > 0 ? config.maxLatenessMs : 1_000;
+  let ended = false;
 
   function push(reading: Reading): WindowSummary[] {
+    if (ended) {
+      throw new Error('Cannot push to a stream after end() has been called');
+    }
+
     let state = devices.get(reading.deviceId);
     if (state === undefined) {
       state = {
@@ -122,6 +128,7 @@ export function createStreamWithStats(config: Config): InstrumentedStream {
   }
 
   function end(): WindowSummary[] {
+    ended = true;
     const remaining: WindowSummary[] = [];
     for (const [deviceId, state] of devices) {
       for (const [ws, acc] of state.windows) {

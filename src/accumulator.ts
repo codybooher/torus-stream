@@ -24,7 +24,7 @@ export function addValue(acc: WindowAccumulator, value: number): void {
 
 /** Exact nearest-rank 95th percentile: `sorted[ceil(0.95 * n) - 1]`. */
 function computeExactP95(values: number[]): number {
-  const sorted = values.toSorted((a, b) => a - b);
+  const sorted = [...values].sort((a, b) => a - b);
   // Integer ceiling division avoids IEEE-754 drift in `0.95 * n`.
   const index = Math.floor((95 * sorted.length + 99) / 100) - 1;
   return sorted[index];

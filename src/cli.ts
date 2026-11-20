@@ -10,5 +10,6 @@ console.table(
     ...w,
     windowStart: new Date(w.windowStart).toISOString(),
     avg: Number(w.avg.toFixed(2)),
+    ...(w.p95 !== undefined ? { p95: Number(w.p95.toFixed(2)) } : {}),
   })),
 );

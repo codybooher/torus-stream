@@ -1,12 +1,13 @@
 import type { Config, Gap, Reading } from './types.ts';
 import { createReadingFilter } from './clean.ts';
-import { compareDeviceId } from './rules.ts';
+import { assertValidConfig, compareDeviceId } from './rules.ts';
 
 /**
  * Tier 2. Report every gap in each device's accepted readings.
  * See "Tier 2" in the README.
  */
 export function detectGaps(readings: Reading[], config: Config): Gap[] {
+  assertValidConfig(config);
   const filter = createReadingFilter(config);
   const timestampsByDevice = new Map<string, number[]>();
 
