@@ -126,20 +126,34 @@ test('computes exact nearest-rank p95 across sample sizes and unsorted inputs', 
   assert.equal(summarize(negAndTies, config)[0].p95, 0);
 });
 
-test('rejects invalid config values across summarize, detectGaps, and createStream', () => {
-  const badConfigs: Config[] = [
-    { ...config, windowMs: 0 },
-    { ...config, windowMs: -1_000 },
-    { ...config, windowMs: NaN },
+test('validates only the config fields used by each entrypoint', () => {
+  const badBaseConfigs: Config[] = [
     { ...config, maxLatenessMs: -1 },
-    { ...config, gapMs: -1 },
     { ...config, validRange: { min: 10, max: 5 } },
     { ...config, validRange: { min: -Infinity, max: 10 } },
   ];
-
-  for (const bad of badConfigs) {
+  for (const bad of badBaseConfigs) {
     assert.throws(() => summarize([], bad), RangeError);
     assert.throws(() => detectGaps([], bad), RangeError);
     assert.throws(() => createStream(bad), RangeError);
   }
+
+  // Invalid windowMs fails summarize/createStream, while detectGaps does not require windowMs.
+  for (const badWindow of [0, -1_000, NaN]) {
+    const cfg = { ...config, windowMs: badWindow };
+    assert.throws(() => summarize([], cfg), RangeError);
+    assert.throws(() => createStream(cfg), RangeError);
+    assert.deepEqual(detectGaps([], cfg), []);
+  }
+
+  // Invalid or omitted gapMs fails detectGaps, while summarize/createStream do not require gapMs.
+  const withoutGap = {
+    windowMs: config.windowMs,
+    maxLatenessMs: config.maxLatenessMs,
+    validRange: config.validRange,
+  } as Config;
+  assert.deepEqual(summarize([], withoutGap), []);
+  assert.deepEqual(createStream(withoutGap).end(), []);
+  assert.throws(() => detectGaps([], withoutGap), RangeError);
+  assert.throws(() => detectGaps([], { ...config, gapMs: -1 }), RangeError);
 });

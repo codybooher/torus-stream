@@ -5,7 +5,7 @@ import {
   toWindowSummary,
   type WindowAccumulator,
 } from './accumulator.ts';
-import { assertValidConfig, isTooLate, isValidValue, windowStartOf } from './rules.ts';
+import { assertValidWindowConfig, isTooLate, isValidValue, windowStartOf } from './rules.ts';
 
 export type Stream = {
   /** Accept one reading, in arrival order. Returns any windows that just became final. */
@@ -37,11 +37,16 @@ type DeviceStreamState = {
  * Internal factory that exposes live memory counters alongside the `Stream` API.
  */
 export function createStreamWithStats(config: Config): InstrumentedStream {
-  assertValidConfig(config);
+  assertValidWindowConfig(config);
+  // Snapshot config values so caller mutations cannot corrupt an active stream.
+  const windowMs = config.windowMs;
+  const maxLatenessMs = config.maxLatenessMs;
+  const validRange = { min: config.validRange.min, max: config.validRange.max };
+
   const devices = new Map<string, DeviceStreamState>();
   // Bucket width for time-based eviction of `seenSeqs`. When `maxLatenessMs > 0`,
   // using `maxLatenessMs` keeps at most ~2 live buckets per active device.
-  const bucketMs = config.maxLatenessMs > 0 ? config.maxLatenessMs : 1_000;
+  const bucketMs = maxLatenessMs > 0 ? maxLatenessMs : 1_000;
   let ended = false;
 
   function push(reading: Reading): WindowSummary[] {
@@ -63,7 +68,7 @@ export function createStreamWithStats(config: Config): InstrumentedStream {
     // Rule 3 fast-path: a reading strictly behind the lateness watermark is dropped,
     // and any future resend (which carries the same `ts`) will also be late, so we
     // never need to retain its `seq`.
-    if (isTooLate(reading.ts, state.newestAcceptedTs, config.maxLatenessMs)) {
+    if (isTooLate(reading.ts, state.newestAcceptedTs, maxLatenessMs)) {
       return [];
     }
 
@@ -81,12 +86,12 @@ export function createStreamWithStats(config: Config): InstrumentedStream {
     bucket.push(reading.seq);
 
     // Rule 1: drop invalid values.
-    if (!isValidValue(reading.value, config.validRange)) {
+    if (!isValidValue(reading.value, validRange)) {
       return [];
     }
 
     // Accepted: accumulate into the reading's tumbling window.
-    const windowStart = windowStartOf(reading.ts, config.windowMs);
+    const windowStart = windowStartOf(reading.ts, windowMs);
     const acc = state.windows.get(windowStart);
     if (acc === undefined) {
       state.windows.set(windowStart, createAccumulator(reading.value));
@@ -100,7 +105,7 @@ export function createStreamWithStats(config: Config): InstrumentedStream {
     }
     state.newestAcceptedTs = reading.ts;
 
-    const watermark = state.newestAcceptedTs - config.maxLatenessMs;
+    const watermark = state.newestAcceptedTs - maxLatenessMs;
 
     // Evict seq buckets whose timestamps are all strictly behind `watermark`.
     // Every `ts` in bucket `b` satisfies `ts < (b + 1) * bucketMs`, so when
@@ -116,9 +121,12 @@ export function createStreamWithStats(config: Config): InstrumentedStream {
     }
 
     // Emit and drop windows that can never receive another accepted reading.
+    // Using `windowStartOf(watermark, windowMs)` guarantees consistency even for
+    // fractional `windowMs` where `ws + windowMs <= watermark` can suffer float drift.
+    const earliestOpen = windowStartOf(watermark, windowMs);
     const closed: WindowSummary[] = [];
     for (const [ws, windowAcc] of state.windows) {
-      if (ws + config.windowMs <= watermark) {
+      if (ws < earliestOpen) {
         closed.push(toWindowSummary(reading.deviceId, ws, windowAcc));
         state.windows.delete(ws);
       }

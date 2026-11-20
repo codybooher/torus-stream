@@ -197,6 +197,36 @@ test('invalid-only stream emits no windows and does not mutate frozen readings',
   assert.deepEqual(stream.end(), []);
 });
 
+test('fractional windowMs does not close a window early or emit it twice', () => {
+  // With windowMs=0.1, 0.6 / 0.1 === 5.999999999999999, so ts=0.6 maps to windowStart=0.5.
+  // Checking ws < windowStartOf(watermark, windowMs) keeps window 0.5 open when watermark=0.6.
+  const cfg: Config = { ...config, windowMs: 0.1, maxLatenessMs: 0.1 };
+  const readings = [r('a', 0.55, 10), r('a', 0.7, 20), r('a', 0.6, 30), r('a', 1.0, 40)];
+  assertMatchesSummarize(readings, cfg);
+});
+
+test('mutating the caller config object after createStream() does not affect an active stream', () => {
+  const mutableConfig: Config = {
+    windowMs: 60_000,
+    maxLatenessMs: 5_000,
+    gapMs: 10_000,
+    validRange: { min: 0, max: 100 },
+  };
+  const stream = createStream(mutableConfig);
+
+  // Mutate every field on the caller's config after creation.
+  mutableConfig.windowMs = 1_000;
+  mutableConfig.maxLatenessMs = 0;
+  mutableConfig.validRange.max = 5;
+
+  // Stream must still use its original snapshot (validRange max=100, maxLatenessMs=5_000, windowMs=60_000).
+  assert.deepEqual(stream.push(r('a', 10_000, 50)), []);
+  assert.deepEqual(stream.push(r('a', 5_000, 70)), []);
+  assert.deepEqual(stream.end(), [
+    { deviceId: 'a', windowStart: 0, count: 2, min: 50, max: 70, avg: 60, p95: 70 },
+  ]);
+});
+
 test('matches summarize on data/sample.json', () => {
   const readings: Reading[] = JSON.parse(
     readFileSync(new URL('../data/sample.json', import.meta.url), 'utf8'),

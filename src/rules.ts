@@ -1,17 +1,10 @@
 import type { Config, WindowSummary } from './types.ts';
 
-/** Fail fast if a caller supplies an invalid `Config`. */
-export function assertValidConfig(config: Config): void {
-  if (!Number.isFinite(config.windowMs) || config.windowMs <= 0) {
-    throw new RangeError(`config.windowMs must be a finite number > 0 (got ${config.windowMs})`);
-  }
+function assertValidBaseConfig(config: Config): void {
   if (!Number.isFinite(config.maxLatenessMs) || config.maxLatenessMs < 0) {
     throw new RangeError(
       `config.maxLatenessMs must be a finite number >= 0 (got ${config.maxLatenessMs})`,
     );
-  }
-  if (!Number.isFinite(config.gapMs) || config.gapMs < 0) {
-    throw new RangeError(`config.gapMs must be a finite number >= 0 (got ${config.gapMs})`);
   }
   if (
     !Number.isFinite(config.validRange.min) ||
@@ -21,6 +14,22 @@ export function assertValidConfig(config: Config): void {
     throw new RangeError(
       `config.validRange must have finite bounds with min <= max (got [${config.validRange.min}, ${config.validRange.max}])`,
     );
+  }
+}
+
+/** Fail fast if a caller supplies an invalid `Config` for windowing (`summarize`, `createStream`). */
+export function assertValidWindowConfig(config: Config): void {
+  assertValidBaseConfig(config);
+  if (!Number.isFinite(config.windowMs) || config.windowMs <= 0) {
+    throw new RangeError(`config.windowMs must be a finite number > 0 (got ${config.windowMs})`);
+  }
+}
+
+/** Fail fast if a caller supplies an invalid `Config` for gap detection (`detectGaps`). */
+export function assertValidGapConfig(config: Config): void {
+  assertValidBaseConfig(config);
+  if (!Number.isFinite(config.gapMs) || config.gapMs < 0) {
+    throw new RangeError(`config.gapMs must be a finite number >= 0 (got ${config.gapMs})`);
   }
 }
 

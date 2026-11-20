@@ -6,14 +6,14 @@ import {
   type WindowAccumulator,
 } from './accumulator.ts';
 import { createReadingFilter } from './clean.ts';
-import { assertValidConfig, compareWindowSummaries, windowStartOf } from './rules.ts';
+import { assertValidWindowConfig, compareWindowSummaries, windowStartOf } from './rules.ts';
 
 /**
  * Tier 1. Clean `readings` (given in arrival order) and summarize each
  * device's accepted readings per window. See "Rules" in the README.
  */
 export function summarize(readings: Reading[], config: Config): WindowSummary[] {
-  assertValidConfig(config);
+  assertValidWindowConfig(config);
   const filter = createReadingFilter(config);
   const byDevice = new Map<string, Map<number, WindowAccumulator>>();
 
