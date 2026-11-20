@@ -20,7 +20,7 @@ Readings are classified in arrival order as `duplicate → invalid → late → 
 
 ### Streaming Memory Bound & Honest Limits
 For each device with newest accepted timestamp `N`, lateness `L = maxLatenessMs`, and window width `W = windowMs`, define `watermark = N - L`:
-- **Window closure**: Any future accepted reading must satisfy `ts >= watermark`. A window `[ws, ws + W)` can never change once `ws + W <= watermark`, so it is emitted and deleted immediately. Each device holds at most `ceil(L / W) + 1` open windows. Quiet devices keep their windows open until `end()`.
+- **Window closure**: Any future accepted reading must satisfy `ts >= watermark`. A window closes once `ws < windowStartOf(watermark, W)` (equivalent to `ws + W <= watermark` for integer `W`, while avoiding float drift on fractional `W`), so it is emitted and deleted immediately. Each device holds at most `ceil(L / W) + 1` open windows. Quiet devices keep their windows open until `end()`.
 - **Bounded deduplication**: A resend carries the same `ts` as the original. Any arrival with `ts < watermark` is dropped as late without inserting into `seenSeqs`, and any future resend of it will also be late. Non-late `seq`s are indexed in time buckets of width `bucketMs = L > 0 ? L : 1_000`; whenever `N` advances, any bucket `b < floor(watermark / bucketMs)` has all timestamps strictly `< watermark` and is evicted in amortized O(1).
 - **Limits**:
   1. Memory is **O(active devices × readings within the lateness/window horizon)**; an unbounded number of distinct `deviceId`s cannot be bounded without an eviction policy.
@@ -31,8 +31,8 @@ Chose **exact nearest-rank `p95`** using integer ceiling division `Math.floor((9
 
 ## Assumptions & What Was Skipped
 
-- **Assumptions**: Readings carry finite `ts` and `seq`, and resends preserve `ts` as specified. Invalid `Config` values (`windowMs <= 0`, negative `maxLatenessMs`/`gapMs`, inverted or non-finite `validRange`) fail fast with `RangeError`, and `push()` after `end()` throws (while `end()` itself is idempotent).
-- **Skipped**: Adding `typescript` as a devDependency for `tsc` typechecking (kept zero dependencies and no install step as in the starter repo; `AGENTS.md` enforces erasable TS conventions).
+- **Assumptions**: Readings carry finite `ts` and `seq`, and resends preserve `ts` as specified. Invalid `Config` values fail fast with `RangeError`, scoped to the fields each entrypoint actually uses (`windowMs` in `summarize`/`createStream`, `gapMs` in `detectGaps`, and `maxLatenessMs`/`validRange` in all three). `createStream` snapshots its config at creation so mid-stream caller mutations cannot corrupt active state, and `push()` after `end()` throws (while `end()` itself is idempotent).
+- **Skipped**: Adding `typescript` as a devDependency for `tsc` typechecking (kept zero dependencies and no install step as in the starter repo; `AGENTS.md` enforces erasable TS conventions, and a one-off local `tsc --noEmit` confirmed zero type errors in source and test logic). Also skipped an approximate quantile sketch (t-digest/DDSketch) in favor of exact `p95` as explained above.
 
 ## What I Would Do Next With More Time
 
