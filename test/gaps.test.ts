@@ -48,6 +48,19 @@ test('evaluates gaps in ts order even when readings arrive out of order', () => 
     config,
   );
   assert.deepEqual(gapped, [{ deviceId: 'a', start: 1_000, end: 12_000 }]);
+
+  // Identical timestamps produce no gap; an out-of-order reading can split one large silence into two.
+  const identical = detectGaps([r('a', 5_000, 10), r('a', 5_000, 11)], config);
+  assert.deepEqual(identical, []);
+
+  const split = detectGaps(
+    [r('a', 0, 10), r('a', 30_000, 11), r('a', 15_000, 12)],
+    { ...config, maxLatenessMs: 20_000 },
+  );
+  assert.deepEqual(split, [
+    { deviceId: 'a', start: 0, end: 15_000 },
+    { deviceId: 'a', start: 15_000, end: 30_000 },
+  ]);
 });
 
 test('dropped readings (invalid, duplicate, late) do not bridge a gap', () => {

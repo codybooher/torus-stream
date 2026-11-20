@@ -65,10 +65,11 @@ function assertMatchesSummarize(readings: Reading[], cfg: Config): void {
   }
 }
 
-test('empty stream returns no windows and end() is idempotent', () => {
+test('empty stream returns no windows, end() is idempotent, and push() after end() throws', () => {
   const stream = createStream(config);
   assert.deepEqual(stream.end(), []);
   assert.deepEqual(stream.end(), []);
+  assert.throws(() => stream.push(r('a', 1_000, 10)), /after end\(\)/);
 });
 
 test('emits a window at the exact earliest push when it can no longer change', () => {
@@ -141,6 +142,59 @@ test('evicted seqs are still dropped on resend because they are behind the water
   assert.deepEqual(stream.end(), [
     { deviceId: 'a', windowStart: 60_000, count: 1, min: 20, max: 20, avg: 20, p95: 20 },
   ]);
+});
+
+test('closes multiple open windows in a single push when maxLatenessMs > windowMs', () => {
+  const cfg: Config = { ...config, windowMs: 10_000, maxLatenessMs: 25_000 };
+  const stream = createStream(cfg);
+
+  assert.deepEqual(stream.push(r('a', 1_000, 1)), []);
+  assert.deepEqual(stream.push(r('a', 11_000, 2)), []);
+  assert.deepEqual(stream.push(r('a', 21_000, 3)), []);
+
+  // Jump to ts=60_000 -> watermark=35_000 -> windows [0, 10k), [10k, 20k), [20k, 30k) all close.
+  const closed = stream.push(r('a', 60_000, 4)).sort(compareWindowSummaries);
+  assert.deepEqual(
+    closed.map((w) => w.windowStart),
+    [0, 10_000, 20_000],
+  );
+  assert.deepEqual(
+    stream.end().map((w) => w.windowStart),
+    [60_000],
+  );
+});
+
+test('drops a valid resend of a previously invalid reading within the lateness horizon', () => {
+  const stream = createStream(config);
+  assert.deepEqual(stream.push(r('a', 1_000, null, 77)), []);
+  assert.deepEqual(stream.push(r('a', 1_000, 25, 77)), []);
+  assert.deepEqual(stream.end(), []);
+});
+
+test('maxLatenessMs of 0 closes a window immediately at the next boundary and deduplicates same-ts resends', () => {
+  const stream = createStream({ ...config, maxLatenessMs: 0 });
+  assert.deepEqual(stream.push(r('a', 1_000, null, 1)), []);
+  assert.deepEqual(stream.push(r('a', 1_000, 50, 1)), []);
+  assert.deepEqual(stream.push(r('a', 1_000, 10, 2)), []);
+
+  // Pushing ts=60_000 moves watermark to 60_000, immediately closing [0, 60_000).
+  const closed = stream.push(r('a', 60_000, 20, 3));
+  assert.deepEqual(closed, [
+    { deviceId: 'a', windowStart: 0, count: 1, min: 10, max: 10, avg: 10, p95: 10 },
+  ]);
+  assert.deepEqual(stream.end(), [
+    { deviceId: 'a', windowStart: 60_000, count: 1, min: 20, max: 20, avg: 20, p95: 20 },
+  ]);
+});
+
+test('invalid-only stream emits no windows and does not mutate frozen readings', () => {
+  const stream = createStream(config);
+  const readings = [r('a', 1_000, null), r('a', 2_000, NaN), r('a', 3_000, 999)];
+  for (const reading of readings) {
+    Object.freeze(reading);
+    assert.deepEqual(stream.push(reading), []);
+  }
+  assert.deepEqual(stream.end(), []);
 });
 
 test('matches summarize on data/sample.json', () => {

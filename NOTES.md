@@ -31,12 +31,11 @@ Chose **exact nearest-rank `p95`** using integer ceiling division `Math.floor((9
 
 ## Assumptions & What Was Skipped
 
-- **Assumptions**: `config.windowMs > 0`, `config.maxLatenessMs >= 0`, `config.validRange.min <= config.validRange.max`, and readings have finite `ts` and `seq`. Resends preserve `ts` as specified.
+- **Assumptions**: Readings carry finite `ts` and `seq`, and resends preserve `ts` as specified. Invalid `Config` values (`windowMs <= 0`, negative `maxLatenessMs`/`gapMs`, inverted or non-finite `validRange`) fail fast with `RangeError`, and `push()` after `end()` throws (while `end()` itself is idempotent).
 - **Skipped**: Adding `typescript` as a devDependency for `tsc` typechecking (kept zero dependencies and no install step as in the starter repo; `AGENTS.md` enforces erasable TS conventions).
 
 ## What I Would Do Next With More Time
 
-1. **Config & input validation**: Guard against invalid configs (`windowMs <= 0`, inverted `validRange`) and non-finite `ts`/`seq`.
-2. **Production stream hardening**: Add an idle-device TTL / max-state cap with observability metrics (drop-reason counters for `duplicate`, `invalid`, `late`, plus forced-eviction alerts) to handle the pathological-device cases above.
-3. **High-rate percentile sketch**: Make `p95` pluggable so high-frequency fleets can opt into a bounded-memory t-digest/DDSketch while low-rate fleets keep exact percentiles.
-4. **CI typecheck**: Run `tsc --noEmit` in CI alongside `node --test` since Node type-stripping does not typecheck.
+1. **Production stream hardening**: Add an idle-device TTL / max-state cap with observability metrics (drop-reason counters for `duplicate`, `invalid`, `late`, plus forced-eviction alerts) to handle the pathological-device cases above.
+2. **High-rate percentile sketch**: Make `p95` pluggable so high-frequency fleets can opt into a bounded-memory t-digest/DDSketch while low-rate fleets keep exact percentiles.
+3. **CI typecheck**: Run `tsc --noEmit` in CI alongside `node --test` since Node type-stripping does not typecheck.

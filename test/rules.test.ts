@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { summarize, type Config, type Reading } from '../src/index.ts';
+import { createStream, detectGaps, summarize, type Config, type Reading } from '../src/index.ts';
 
 const config: Config = {
   windowMs: 60_000,
@@ -114,4 +114,32 @@ test('computes exact nearest-rank p95 across sample sizes and unsorted inputs', 
   // 100 values 1..100 -> ceil(0.95 * 100) = 95th smallest = 95.
   const hundred = Array.from({ length: 100 }, (_, i) => r('a', 1_000 + i * 10, 100 - i));
   assert.equal(summarize(hundred, config)[0].p95, 95);
+
+  // Negative values and duplicates verify numeric (not lexicographic) sorting and tie handling.
+  const negAndTies = [
+    r('a', 1_000, -10),
+    r('a', 2_000, -40),
+    r('a', 3_000, -2),
+    r('a', 4_000, -40),
+    r('a', 5_000, 0),
+  ];
+  assert.equal(summarize(negAndTies, config)[0].p95, 0);
+});
+
+test('rejects invalid config values across summarize, detectGaps, and createStream', () => {
+  const badConfigs: Config[] = [
+    { ...config, windowMs: 0 },
+    { ...config, windowMs: -1_000 },
+    { ...config, windowMs: NaN },
+    { ...config, maxLatenessMs: -1 },
+    { ...config, gapMs: -1 },
+    { ...config, validRange: { min: 10, max: 5 } },
+    { ...config, validRange: { min: -Infinity, max: 10 } },
+  ];
+
+  for (const bad of badConfigs) {
+    assert.throws(() => summarize([], bad), RangeError);
+    assert.throws(() => detectGaps([], bad), RangeError);
+    assert.throws(() => createStream(bad), RangeError);
+  }
 });
